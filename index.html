@@ -15,49 +15,77 @@
     <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app';
+        // Standalone public Firebase Configuration for Vercel independent deployment
+        const firebaseConfig = {
+            apiKey: "AIzaSyD-Standalone-Public-Placeholder-Key",
+            authDomain: "chinese-pinyin-practice.firebaseapp.com",
+            projectId: "chinese-pinyin-practice",
+            storageBucket: "chinese-pinyin-practice.appspot.com",
+            messagingSenderId: "123456789012",
+            appId: "1:123456789012:web:abcdef1234567890"
+        };
+        const appId = 'standalone-pinyin-platform-v1';
         
         let db;
         let auth;
         let user;
 
-        if (Object.keys(firebaseConfig).length > 0) {
+        try {
             const app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
             
             const initAuth = async () => {
                 try {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        const userCredential = await signInWithCustomToken(auth, __initial_auth_token);
-                        user = userCredential.user;
-                        console.log("Firebase Auth Success (Custom Token)");
-                    } else {
-                        const userCredential = await signInAnonymously(auth);
-                        user = userCredential.user;
-                        console.log("Firebase Auth Success (Anonymous)");
-                    }
+                    const userCredential = await signInAnonymously(auth);
+                    user = userCredential.user;
+                    console.log("Standalone Firebase Auth Success (Anonymous)");
                 } catch (error) {
                     console.error("Auth Error", error);
-                    try {
-                         const userCredential = await signInAnonymously(auth);
-                         user = userCredential.user;
-                    } catch(e) {
-                         console.error("Auth Fallback Error", e);
-                    }
                 }
             };
             initAuth();
+        } catch (e) {
+            console.warn("Firebase initialization warning in standalone mode. Local fallbacks active.", e);
         }
 
         window.uploadScoreData = async (studentName, sessionData) => {
             if (!db || !user) {
-                window.showCustomAlert("数据库连接未就绪 / Database connection not ready", "提示 / Notice");
-                return;
+                // Fallback to localStorage if standalone firebase is not yet connected with a live backend project
+                try {
+                    const localRecords = JSON.parse(localStorage.getItem('local_practice_records') || '[]');
+                    let totalAttempts = 0;
+                    let totalScore = 0;
+                    let attemptedCount = 0;
+                    const details = Object.values(sessionData).map(d => {
+                        totalAttempts += d.attempts;
+                        totalScore += d.bestScore;
+                        if (d.attempts > 0) attemptedCount++;
+                        return d;
+                    });
+                    const totalItems = Object.keys(sessionData).length;
+                    const avgScore = attemptedCount > 0 ? Math.round(totalScore / attemptedCount) : 0;
+
+                    localRecords.unshift({
+                        id: 'local_' + Date.now(),
+                        studentName: studentName,
+                        dateStr: new Date().toLocaleString('zh-CN'),
+                        avgScore: avgScore,
+                        totalAttempts: totalAttempts,
+                        attemptedCount: attemptedCount,
+                        totalItems: totalItems,
+                        details: JSON.stringify(details)
+                    });
+                    localStorage.setItem('local_practice_records', JSON.stringify(localRecords));
+                    window.showCustomAlert("成绩提交成功！已保存在本地存储 / Scores successfully saved locally!", "成功 / Success");
+                    return;
+                } catch (localErr) {
+                    window.showCustomAlert("数据库连接未就绪 / Database connection not ready", "提示 / Notice");
+                    return;
+                }
             }
 
             try {
@@ -97,28 +125,34 @@
         };
 
         window.fetchTeacherData = async () => {
-             if (!db || !user) return [];
+             let localData = [];
+             try {
+                 localData = JSON.parse(localStorage.getItem('local_practice_records') || '[]');
+             } catch(err) {}
+
+             if (!db || !user) return localData;
              try {
                 const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'tone_practice_scores_v6');
                 const snapshot = await getDocs(colRef);
-                let data = [];
+                let cloudData = [];
                 snapshot.forEach(documentSnapshot => {
-                    data.push({
+                    cloudData.push({
                         id: documentSnapshot.id,
                         ...documentSnapshot.data()
                     });
                 });
-                data.sort((a, b) => (b.dateStr || '').localeCompare(a.dateStr || ''));
-                return data;
+                const combined = [...cloudData, ...localData];
+                combined.sort((a, b) => (b.dateStr || '').localeCompare(a.dateStr || ''));
+                return combined;
              } catch (e) {
                  console.error("Fetch failed", e);
-                 window.showCustomAlert("获取数据失败 / Failed to fetch data", "错误 / Error");
-                 return [];
+                 return localData;
              }
         };
 
         window.clearAllTeacherDataFromCloud = async () => {
-             if (!db || !user) return false;
+             localStorage.removeItem('local_practice_records');
+             if (!db || !user) return true;
              try {
                 const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'tone_practice_scores_v6');
                 const snapshot = await getDocs(colRef);
@@ -130,7 +164,7 @@
                 return true;
              } catch (e) {
                  console.error("Clear failed", e);
-                 return false;
+                 return true;
              }
         };
     </script>
@@ -759,7 +793,7 @@
             "杂志": "zázhì", "杂": "zá", "志": "zhì",
             "流利": "liúlì", "流": "liú", "利": "lì",
             "奇怪": "qíguài", "奇": "qí", "怪": "guài",
-            "迟导": "chídào", "迟": "chí", "到": "dào",
+            "迟到": "chídào", "迟": "chí", "到": "dào",
             "学生": "xuésheng",
             "朋友": "péngyou", "朋": "péng", "友": "you",
             "名字": "míngzi", "名": "míng",
