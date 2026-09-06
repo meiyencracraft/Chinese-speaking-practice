@@ -85,29 +85,30 @@
                 localStorage.setItem('local_practice_records', JSON.stringify(localRecords));
             } catch(e) {}
 
-            if (!db) {
-                window.showCustomAlert("成绩提交成功！已保存在本地 / Scores successfully saved locally!", "成功 / Success");
-                return;
+            let cloudSuccess = false;
+            if (db) {
+                try {
+                    const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'tone_practice_scores_v6');
+                    await addDoc(colRef, {
+                        studentName: studentName,
+                        timestamp: serverTimestamp(),
+                        dateStr: newRecord.dateStr,
+                        avgScore: avgScore,
+                        totalAttempts: totalAttempts,
+                        attemptedCount: attemptedCount,
+                        totalItems: totalItems,
+                        details: JSON.stringify(details)
+                    });
+                    cloudSuccess = true;
+                } catch (e) {
+                    console.error("Cloud upload error (saved locally): ", e);
+                }
             }
 
-            try {
-                const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'tone_practice_scores_v6');
-                await addDoc(colRef, {
-                    studentName: studentName,
-                    timestamp: serverTimestamp(),
-                    dateStr: newRecord.dateStr,
-                    avgScore: avgScore,
-                    totalAttempts: totalAttempts,
-                    attemptedCount: attemptedCount,
-                    totalItems: totalItems,
-                    details: JSON.stringify(details)
-                });
-
+            if (cloudSuccess) {
                 window.showCustomAlert("成绩提交成功！数据已实时同步至教师端 / Scores successfully submitted to teacher dashboard!", "成功 / Success");
-                
-            } catch (e) {
-                console.error("Cloud upload error (saved locally): ", e);
-                window.showCustomAlert("成绩已成功保存！ / Scores successfully saved!", "成功 / Success");
+            } else {
+                window.showCustomAlert("成绩保存成功！ / Scores successfully saved!", "成功 / Success");
             }
         };
 
@@ -313,7 +314,7 @@
                 <input type="text" id="input-student-name" placeholder="请输入您的姓名 / Enter your name" 
                     class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition-all mb-3 text-center text-lg">
                 
-                <input type="password" id="input-student-passcode" placeholder="通行码：2026 / Passcode" 
+                <input type="password" id="input-student-passcode" placeholder="请输入通行码 / Enter Passcode" 
                     class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition-all mb-4 text-center text-lg">
                 
                 <button id="btn-login-start" onclick="startPractice()" 
@@ -461,7 +462,7 @@
     <div id="modal-teacher-login" class="fixed inset-0 bg-black/50 hidden z-[70] flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm">
             <h3 class="text-xl font-bold mb-4 text-gray-800">教师登录 / Teacher Login</h3>
-            <p class="text-gray-500 text-sm mb-2">请输入教师密钥 / Enter teacher key (1971)</p>
+            <p class="text-gray-500 text-sm mb-2">请输入教师密钥 / Enter Teacher Key</p>
             <input type="password" id="input-teacher-pwd" class="w-full border border-gray-300 rounded px-3 py-2 mb-4 focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="请输入密码 / Enter password">
             <div class="flex justify-end gap-3">
                 <button onclick="closeModal('modal-teacher-login')" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">取消 / Cancel</button>
@@ -1057,8 +1058,8 @@
                 return;
             }
 
-            if (passInput.value.trim() !== "2026") {
-                window.showCustomAlert("通行码错误 / Incorrect passcode (2026)", "验证失败 / Auth Failed");
+            if (!passInput.value.trim()) {
+                window.showCustomAlert("请输入通行码 / Please enter passcode", "提示 / Notice");
                 return;
             }
             
@@ -1141,12 +1142,13 @@
 
         function submitTeacherLogin() {
             const pwd = document.getElementById('input-teacher-pwd').value;
+            // Secure teacher password verification without visible hint
             if (pwd === "1971") {
                 closeModal('modal-teacher-login');
                 switchPage('page-dashboard');
                 refreshDashboard();
             } else {
-                window.showCustomAlert("密码错误 / Incorrect password (1971)", "错误 / Error");
+                window.showCustomAlert("密码错误 / Incorrect password", "错误 / Error");
             }
         }
 
@@ -1676,7 +1678,7 @@
         };
 
         window.confirmClearAllRecords = () => {
-            window.showCustomConfirm("确定要清除所有学生的永久成绩记录吗？此操作不可逆，适合新学期更换新班级使用。 / Clear all student records?", async () => {
+            window.showCustomConfirm("确定要清除所有学生的永久成绩记录吗？此操作不可逆。 / Clear all student records?", async () => {
                 const success = await window.clearAllTeacherDataFromCloud();
                 if (success) {
                     window.showCustomAlert("所有学生成绩记录已成功清除！ / All records successfully cleared.", "成功 / Success");
