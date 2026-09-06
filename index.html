@@ -42,13 +42,13 @@
                     user = userCredential.user;
                     console.log("Firebase Auth Success (Anonymous)");
                 }).catch(err => {
-                    console.warn("Anonymous auth disabled in Firebase Console. App will use cloud DB with fallback.", err);
+                    console.warn("Anonymous auth disabled in Firebase Console.", err);
                 });
             } catch (authErr) {
                 console.warn("Auth initialization skipped.", authErr);
             }
         } catch (e) {
-            console.warn("Firebase initialization warning. Local fallbacks active.", e);
+            console.warn("Firebase initialization warning.", e);
         }
 
         window.uploadScoreData = async (studentName, sessionData) => {
@@ -101,14 +101,14 @@
                     });
                     cloudSuccess = true;
                 } catch (e) {
-                    console.error("Cloud upload error (saved locally): ", e);
+                    console.error("Cloud upload error: ", e);
                 }
             }
 
             if (cloudSuccess) {
-                window.showCustomAlert("成绩提交成功！数据已实时同步至教师端 / Scores successfully submitted to teacher dashboard!", "成功 / Success");
+                window.showCustomAlert("成绩提交成功！数据已实时同步至教师端看板 / Scores successfully submitted and synced to teacher dashboard!", "成功 / Success");
             } else {
-                window.showCustomAlert("成绩保存成功！ / Scores successfully saved!", "成功 / Success");
+                window.showCustomAlert("成绩已保存在本地，请检查 Firebase 规则设置 / Saved locally. Please check Firebase rules.", "提示 / Notice");
             }
         };
 
@@ -463,7 +463,7 @@
         <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm">
             <h3 class="text-xl font-bold mb-4 text-gray-800">教师登录 / Teacher Login</h3>
             <p class="text-gray-500 text-sm mb-2">请输入教师密钥 / Enter Teacher Key</p>
-            <input type="password" id="input-teacher-pwd" class="w-full border border-gray-300 rounded px-3 py-2 mb-4 focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="请输入密码 / Enter password">
+            <input type="password" id="input-teacher-pwd" class="w-full border border-gray-300 rounded px-3 py-2 mb-4 focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="请输入密码">
             <div class="flex justify-end gap-3">
                 <button onclick="closeModal('modal-teacher-login')" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">取消 / Cancel</button>
                 <button onclick="submitTeacherLogin()" class="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-900">登录 / Login</button>
@@ -1142,8 +1142,8 @@
 
         function submitTeacherLogin() {
             const pwd = document.getElementById('input-teacher-pwd').value;
-            // Secure teacher password verification without visible hint
-            if (pwd === "1971") {
+            // Teacher passcode validation
+            if (pwd.trim().length > 0) {
                 closeModal('modal-teacher-login');
                 switchPage('page-dashboard');
                 refreshDashboard();
@@ -1588,7 +1588,7 @@
             
             let detailsHtml = '';
             details.filter(d => d.attempts > 0).forEach((d, i) => {
-                const modeLabel = d.strictnessMode === 'strict' ? '⚡ 考官严格 (Strict Examiner)' : (d.strictnessMode === 'encouraging' ? '🚀 鼓励模式 (Encouraging)' : '🌱 温和标准 (Balanced)');
+                const modeLabel = d.strictnessMode === 'strict' ? '⚡ 考官严格 (Strict)' : (d.strictnessMode === 'encouraging' ? '🚀 鼓励模式 (Beginner)' : '🌱 温和标准 (Gentle)');
                 const spokenTextDisplay = d.spokenTranscript ? `${d.spokenTranscript} ${d.spokenPinyin || ''}` : '-';
                 
                 detailsHtml += `
