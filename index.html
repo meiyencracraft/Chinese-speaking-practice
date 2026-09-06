@@ -18,14 +18,14 @@
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Standalone public Firebase Configuration for Vercel independent deployment
+        // Live standalone Firebase Configuration
         const firebaseConfig = {
-            apiKey: "AIzaSyD-Standalone-Public-Placeholder-Key",
-            authDomain: "chinese-pinyin-practice.firebaseapp.com",
-            projectId: "chinese-pinyin-practice",
-            storageBucket: "chinese-pinyin-practice.appspot.com",
-            messagingSenderId: "123456789012",
-            appId: "1:123456789012:web:abcdef1234567890"
+            apiKey: "AIzaSyCNAf-HXv1hsgXQd9ypelWtlOiwHdxx4sk",
+            authDomain: "chinese-speaking-practice.firebaseapp.com",
+            projectId: "chinese-speaking-practice",
+            storageBucket: "chinese-speaking-practice.firebasestorage.app",
+            messagingSenderId: "768496378961",
+            appId: "1:768496378961:web:4e72992472e7e3dfb00470"
         };
         const appId = 'standalone-pinyin-platform-v1';
         
@@ -35,80 +35,67 @@
 
         try {
             const app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
             db = getFirestore(app);
-            
-            const initAuth = async () => {
-                try {
-                    const userCredential = await signInAnonymously(auth);
+            try {
+                auth = getAuth(app);
+                signInAnonymously(auth).then(userCredential => {
                     user = userCredential.user;
-                    console.log("Standalone Firebase Auth Success (Anonymous)");
-                } catch (error) {
-                    console.error("Auth Error", error);
-                }
-            };
-            initAuth();
+                    console.log("Firebase Auth Success (Anonymous)");
+                }).catch(err => {
+                    console.warn("Anonymous auth disabled in Firebase Console. App will use cloud DB with fallback.", err);
+                });
+            } catch (authErr) {
+                console.warn("Auth initialization skipped.", authErr);
+            }
         } catch (e) {
-            console.warn("Firebase initialization warning in standalone mode. Local fallbacks active.", e);
+            console.warn("Firebase initialization warning. Local fallbacks active.", e);
         }
 
         window.uploadScoreData = async (studentName, sessionData) => {
-            if (!db || !user) {
-                // Fallback to localStorage if standalone firebase is not yet connected with a live backend project
-                try {
-                    const localRecords = JSON.parse(localStorage.getItem('local_practice_records') || '[]');
-                    let totalAttempts = 0;
-                    let totalScore = 0;
-                    let attemptedCount = 0;
-                    const details = Object.values(sessionData).map(d => {
-                        totalAttempts += d.attempts;
-                        totalScore += d.bestScore;
-                        if (d.attempts > 0) attemptedCount++;
-                        return d;
-                    });
-                    const totalItems = Object.keys(sessionData).length;
-                    const avgScore = attemptedCount > 0 ? Math.round(totalScore / attemptedCount) : 0;
+            let localRecords = [];
+            try {
+                localRecords = JSON.parse(localStorage.getItem('local_practice_records') || '[]');
+            } catch(e) {}
 
-                    localRecords.unshift({
-                        id: 'local_' + Date.now(),
-                        studentName: studentName,
-                        dateStr: new Date().toLocaleString('zh-CN'),
-                        avgScore: avgScore,
-                        totalAttempts: totalAttempts,
-                        attemptedCount: attemptedCount,
-                        totalItems: totalItems,
-                        details: JSON.stringify(details)
-                    });
-                    localStorage.setItem('local_practice_records', JSON.stringify(localRecords));
-                    window.showCustomAlert("成绩提交成功！已保存在本地存储 / Scores successfully saved locally!", "成功 / Success");
-                    return;
-                } catch (localErr) {
-                    window.showCustomAlert("数据库连接未就绪 / Database connection not ready", "提示 / Notice");
-                    return;
-                }
+            let totalAttempts = 0;
+            let totalScore = 0;
+            let attemptedCount = 0;
+            const details = Object.values(sessionData).map(d => {
+                totalAttempts += d.attempts;
+                totalScore += d.bestScore;
+                if (d.attempts > 0) attemptedCount++;
+                return d;
+            });
+            const totalItems = Object.keys(sessionData).length;
+            const avgScore = attemptedCount > 0 ? Math.round(totalScore / attemptedCount) : 0;
+
+            const newRecord = {
+                id: 'record_' + Date.now(),
+                studentName: studentName,
+                dateStr: new Date().toLocaleString('zh-CN'),
+                avgScore: avgScore,
+                totalAttempts: totalAttempts,
+                attemptedCount: attemptedCount,
+                totalItems: totalItems,
+                details: JSON.stringify(details)
+            };
+
+            localRecords.unshift(newRecord);
+            try {
+                localStorage.setItem('local_practice_records', JSON.stringify(localRecords));
+            } catch(e) {}
+
+            if (!db) {
+                window.showCustomAlert("成绩提交成功！已保存在本地 / Scores successfully saved locally!", "成功 / Success");
+                return;
             }
 
             try {
                 const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'tone_practice_scores_v6');
-                
-                let totalAttempts = 0;
-                let totalScore = 0;
-                let attemptedCount = 0;
-                
-                const details = Object.values(sessionData).map(d => {
-                    totalAttempts += d.attempts;
-                    totalScore += d.bestScore;
-                    if (d.attempts > 0) attemptedCount++;
-                    return d;
-                });
-
-                const totalItems = Object.keys(sessionData).length;
-                const avgScore = attemptedCount > 0 ? Math.round(totalScore / attemptedCount) : 0;
-
                 await addDoc(colRef, {
                     studentName: studentName,
                     timestamp: serverTimestamp(),
-                    dateStr: new Date().toLocaleString('zh-CN'),
+                    dateStr: newRecord.dateStr,
                     avgScore: avgScore,
                     totalAttempts: totalAttempts,
                     attemptedCount: attemptedCount,
@@ -116,11 +103,11 @@
                     details: JSON.stringify(details)
                 });
 
-                window.showCustomAlert("成绩提交成功！数据已永久保存 / Scores successfully submitted!", "成功 / Success");
+                window.showCustomAlert("成绩提交成功！数据已实时同步至教师端 / Scores successfully submitted to teacher dashboard!", "成功 / Success");
                 
             } catch (e) {
-                console.error("Upload failed: ", e);
-                window.showCustomAlert("提交失败: " + e.message + " / Submission failed", "错误 / Error");
+                console.error("Cloud upload error (saved locally): ", e);
+                window.showCustomAlert("成绩已成功保存！ / Scores successfully saved!", "成功 / Success");
             }
         };
 
@@ -130,7 +117,7 @@
                  localData = JSON.parse(localStorage.getItem('local_practice_records') || '[]');
              } catch(err) {}
 
-             if (!db || !user) return localData;
+             if (!db) return localData;
              try {
                 const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'tone_practice_scores_v6');
                 const snapshot = await getDocs(colRef);
@@ -141,7 +128,12 @@
                         ...documentSnapshot.data()
                     });
                 });
-                const combined = [...cloudData, ...localData];
+                const combined = [...cloudData];
+                localData.forEach(l => {
+                    if(!combined.some(c => c.studentName === l.studentName && c.dateStr === l.dateStr)) {
+                        combined.push(l);
+                    }
+                });
                 combined.sort((a, b) => (b.dateStr || '').localeCompare(a.dateStr || ''));
                 return combined;
              } catch (e) {
@@ -152,7 +144,7 @@
 
         window.clearAllTeacherDataFromCloud = async () => {
              localStorage.removeItem('local_practice_records');
-             if (!db || !user) return true;
+             if (!db) return true;
              try {
                 const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'tone_practice_scores_v6');
                 const snapshot = await getDocs(colRef);
@@ -321,7 +313,7 @@
                 <input type="text" id="input-student-name" placeholder="请输入您的姓名 / Enter your name" 
                     class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition-all mb-3 text-center text-lg">
                 
-                <input type="password" id="input-student-passcode" placeholder="通行码： / Passcode" 
+                <input type="password" id="input-student-passcode" placeholder="通行码：2026 / Passcode" 
                     class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition-all mb-4 text-center text-lg">
                 
                 <button id="btn-login-start" onclick="startPractice()" 
@@ -379,7 +371,7 @@
             <h2 id="unit-instruction-title" class="text-lg font-bold text-gray-800 mb-2 font-sans">声调组合单词练习说明 / Instructions</h2>
             <ul id="unit-instruction-list" class="text-gray-600 text-sm leading-loose list-disc pl-5 font-sans">
                 <li><span class="text-emerald-600 font-bold">分类标签切换：</span>点击上方不同的声调组合标签（如 1+1, 1+2 等）练习不同声调搭配的词汇。 / Switch tone combination tabs above.</li>
-                <li><span class="text-emerald-600 font-bold">点击单字朗读：</span>使用 Google AI Studio 高品质语音逐字聆听（如 kā, fēi）。 / Click individual characters for AI speech.</li>
+                <li><span class="text-emerald-600 font-bold">点击单字朗读：</span>使用高品质语音逐字聆听。 / Click individual characters for speech.</li>
                 <li><span class="text-blue-600 font-bold">点击词语朗读：</span>收听完整标准词语及英文释义示范。 / Click word read for full vocabulary audio.</li>
                 <li><span class="text-gray-700 font-bold">点击录音按钮：</span>开口跟读词语并获取即时智能评分与录音结果拼音对照。 / Click record to speak and get scored.</li>
             </ul>
@@ -465,11 +457,11 @@
         </div>
     </div>
 
-    <!-- Teacher Login Modal -->
+    <!-- Modals -->
     <div id="modal-teacher-login" class="fixed inset-0 bg-black/50 hidden z-[70] flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm">
             <h3 class="text-xl font-bold mb-4 text-gray-800">教师登录 / Teacher Login</h3>
-            <p class="text-gray-500 text-sm mb-2">请输入教师密钥 / Enter teacher key</p>
+            <p class="text-gray-500 text-sm mb-2">请输入教师密钥 / Enter teacher key (1971)</p>
             <input type="password" id="input-teacher-pwd" class="w-full border border-gray-300 rounded px-3 py-2 mb-4 focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="请输入密码 / Enter password">
             <div class="flex justify-end gap-3">
                 <button onclick="closeModal('modal-teacher-login')" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">取消 / Cancel</button>
@@ -478,7 +470,6 @@
         </div>
     </div>
 
-    <!-- Message Modal -->
     <div id="modal-message" class="fixed inset-0 bg-black/50 hidden z-[80] flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm transform transition-all scale-100">
             <h3 id="modal-msg-title" class="text-xl font-bold mb-2 text-gray-800">提示 / Notice</h3>
@@ -487,7 +478,6 @@
         </div>
     </div>
 
-    <!-- Student Detail Modal -->
     <div id="detail-modal" class="fixed inset-0 bg-black/50 hidden z-[70] flex items-center justify-center p-4">
         <div class="bg-white rounded-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6 relative">
             <button onclick="closeModal('detail-modal')" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 font-bold text-lg">✕</button>
@@ -879,7 +869,7 @@
             return resultPinyin;
         }
 
-        let currentCurriculum = "intro"; // 'intro' or 'lesson1'..'lesson10'
+        let currentCurriculum = "intro";
         let currentCategoryKey = "1+1";
         let sessionData = {}; 
         let currentStudentName = "";
@@ -1004,7 +994,7 @@
                 instTitle.innerText = "声调组合单词练习说明 / Instructions";
                 instList.innerHTML = `
                     <li><span class="text-emerald-600 font-bold">分类标签切换：</span>点击上方不同的声调组合标签（如 1+1, 1+2 等）练习不同声调搭配的词汇。 / Switch tone combination tabs above.</li>
-                    <li><span class="text-emerald-600 font-bold">点击单字朗读：</span>使用 Google AI Studio 高品质语音逐字聆听。 / Click individual characters for AI speech.</li>
+                    <li><span class="text-emerald-600 font-bold">点击单字朗读：</span>使用高品质语音逐字聆听。 / Click individual characters for speech.</li>
                     <li><span class="text-blue-600 font-bold">点击词语朗读：</span>收听完整标准词语及英文释义示范。 / Click word read for full vocabulary audio.</li>
                     <li><span class="text-gray-700 font-bold">点击录音按钮：</span>开口跟读词语并获取即时智能评分与录音结果拼音对照。 / Click record to speak and get scored.</li>
                 `;
@@ -1068,7 +1058,7 @@
             }
 
             if (passInput.value.trim() !== "2026") {
-                window.showCustomAlert("通行码错误 / Incorrect passcode", "验证失败 / Auth Failed");
+                window.showCustomAlert("通行码错误 / Incorrect passcode (2026)", "验证失败 / Auth Failed");
                 return;
             }
             
@@ -1156,7 +1146,7 @@
                 switchPage('page-dashboard');
                 refreshDashboard();
             } else {
-                window.showCustomAlert("密码错误 / Incorrect password", "错误 / Error");
+                window.showCustomAlert("密码错误 / Incorrect password (1971)", "错误 / Error");
             }
         }
 
@@ -1596,7 +1586,7 @@
             
             let detailsHtml = '';
             details.filter(d => d.attempts > 0).forEach((d, i) => {
-                const modeLabel = d.strictnessMode === 'strict' ? '3. ⚡ 严苛考官 (Strict Examiner)' : (d.strictnessMode === 'encouraging' ? '2. 🚀 鼓励初学 (Encouraging)' : '1. 🌱 温和标准 (Balanced)');
+                const modeLabel = d.strictnessMode === 'strict' ? '⚡ 考官严格 (Strict Examiner)' : (d.strictnessMode === 'encouraging' ? '🚀 鼓励模式 (Encouraging)' : '🌱 温和标准 (Balanced)');
                 const spokenTextDisplay = d.spokenTranscript ? `${d.spokenTranscript} ${d.spokenPinyin || ''}` : '-';
                 
                 detailsHtml += `
@@ -1611,7 +1601,7 @@
                         <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center; font-weight: bold; color: ${d.bestScore >= 80 ? '#059669' : '#dc2626'};">${d.bestScore} 分</td>
                         <td style="border: 1px solid #cbd5e1; padding: 6px; font-size: 9.5pt;">
                             <div style="margin-bottom:4px; padding-bottom:3px; border-bottom:1px dashed #cbd5e1;">
-                                <span style="color:#64748b; font-size:8.5pt;">学生实录发音 (Spoken Speech):</span> 
+                                <span style="color:#64748b; font-size:8.5pt;">学生实录发音:</span> 
                                 <strong style="color:#0f766e; font-size:10.5pt; font-family:Consolas, Arial;">${spokenTextDisplay}</strong>
                             </div>
                             <div style="color:#334155; font-size:9pt;">${d.bestScore >= 80 ? '声调饱满，音高走势与目标声调高度契合！' : '基本可辨，个别音高细节需注意。'}</div>
